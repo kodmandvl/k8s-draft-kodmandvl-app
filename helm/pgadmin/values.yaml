@@ -1,0 +1,43 @@
+# External IP address of ingress-nginx-controller LoadBalancer:
+inclbip: 158.160.150.250
+
+# CA ClusterIssuer:
+clusterissuer: myca
+
+# Secret for TLS (создастся автоматически):
+tls:
+  secret: pgadmincert
+
+port: 80
+
+targetport: 80
+
+configmap: pgadmin-configmap
+
+secret: pgadmin-secret
+
+####################################################################################################
+
+# Service:
+service:
+  metadata:
+    name: pgadmin-svc
+
+# Statefulset:
+statefulset:
+  metadata:
+    name: pgadmin
+  spec:
+    servicename: pgadmin
+    replicas: 1
+    template:
+      spec:
+        initcontainers:
+          image:
+            name: docker.io/busybox
+            tag: 1.36.1-glibc
+        containers:
+          image:
+            name: docker.io/dpage/pgadmin4
+            tag: 8.4
+

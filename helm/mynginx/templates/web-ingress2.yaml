@@ -1,0 +1,44 @@
+# Example 2 (with defined host)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.deployment.metadata.name }}-ingress2
+  annotations:
+    ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    cert-manager.io/cluster-issuer: "{{ .Values.clusterissuer }}"
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /(.*)
+        # There are:
+        # /
+        # /index.html
+        # /kitty.html
+        # /basic_status
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: {{ .Values.service.metadata.name }}
+            port:
+              number: {{ .Values.port }}
+      - path: /main
+        # There is main page only (on /main)
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Values.service.metadata.name }}
+            port:
+              number: {{ .Values.port }}
+    host: "web.{{ .Values.inclbip }}.nip.io"
+  tls:
+  - secretName: {{ .Values.tls.secret }}
+    hosts:
+    - {{ .Values.inclbip }}
+    - {{ .Values.inclbip }}.nip.io
+    - web.{{ .Values.inclbip }}.nip.io
+    - pgadmin.{{ .Values.inclbip }}.nip.io
+    - grafana.{{ .Values.inclbip }}.nip.io
+

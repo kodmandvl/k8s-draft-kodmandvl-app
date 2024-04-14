@@ -1,0 +1,3 @@
+ci_access:
+  groups:
+    - id: k8s-draft-kodmandvl/

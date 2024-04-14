@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: graf-svc-lb
+  labels:
+    app.kubernetes.io/instance: prometheus-community
+    app.kubernetes.io/name: grafana
+spec:
+  type: LoadBalancer
+  ports:
+  - name: http-web
+    port: 3000
+    protocol: TCP
+    targetPort: 3000
+    nodePort: 30300
+  selector:
+    app.kubernetes.io/instance: prometheus-community
+    app.kubernetes.io/name: grafana
+

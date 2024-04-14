@@ -1,0 +1,28 @@
+# Этот сертификат предполагался для Nginx и был подписан CA myca через openssl. 
+# От данного варианта отказался, т.к. выбрал вариант выпуска сертификата с моим CA myca, 
+# но с помощью cert-manager и ссылкой на ClusterIssuer myca 
+# (данный серт и ключ там автоматически создается для mynginx). 
+# Здесь этот вариант оставил просто для истории. 
+# openssl x509 -in webcert.crt -text
+# cat webcert.crt | base64 -w0 # tls.crt
+# cat webcert.key | base64 -w0 # tls.key
+# Show with base64 -d:
+# echo -n 'base64_cert' | base64 -d | openssl x509 -text
+# kubectl apply -f webcert.yaml -n web
+# kubectl get secrets -n web
+# kubectl get secrets -o yaml -n web
+# Добавить как дефолтный для ingres-nginx контроллера:
+# kubectl get -n ingress-nginx deployments.apps -o yaml | grep ssl
+# kubectl patch deployment -n ingress-nginx ingress-nginx-controller --type "json" --patch '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--default-ssl-certificate=web/webcert"}]'
+# kubectl get -n ingress-nginx deployments.apps -o yaml | grep ssl
+# kubectl get -n ingress-nginx deployments.apps
+---
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/tls
+metadata:
+  name: webcert
+data:
+  tls.crt: ABCDEFGH
+  tls.key: IJKLMNOPQRSTUVWX
+

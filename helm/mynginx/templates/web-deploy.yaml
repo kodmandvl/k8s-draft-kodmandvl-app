@@ -1,0 +1,35 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.deployment.metadata.name }}
+spec:
+  replicas: {{ .Values.deployment.spec.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Values.deployment.metadata.name }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 100%
+  template:
+    metadata:
+      name: {{ .Values.deployment.metadata.name }}
+      labels:
+        app: {{ .Values.deployment.metadata.name }}
+    spec:
+      containers:
+      - name: {{ .Values.deployment.metadata.name }}
+        image: {{ .Values.deployment.spec.template.spec.containers.image.name }}:{{ .Values.deployment.spec.template.spec.containers.image.tag }}
+        # Если не задать command и args, то выведется информация об имени пода, его IP-адресе и дате запуска (как и задумано у меня в kodmandvl/mynginx:v5).
+        # Ну а в данном случае я переопределил вот так:
+        command: ["/bin/sh"]
+        args: ["-c", "echo '<!DOCTYPE html><html><head><title>MyPG on K8s Welcome Page</title></head><body><h1>Welcome to MyPG on K8s project!</h1><p>Open pgAdmin4: <a href=\"https://pgadmin.{{ .Values.inclbip }}.nip.io\">pgAdmin4</a></p><p>Open Grafana: <a href=\"https://grafana.{{ .Values.inclbip }}.nip.io\">Grafana</a></p><p>Connection string for PostgreSQL (direct): <a href=\"postgres://{{ .Values.pgclbip }}.nip.io:51842/myappdb\">postgres://{{ .Values.pgclbip }}.nip.io:51842/myappdb</a></p><p>Connection string for PostgreSQL (through pooler): <a href=\"postgres://{{ .Values.pgplbip }}.nip.io:51963/myappdb\">postgres://{{ .Values.pgplbip }}.nip.io:51963/myappdb</a></p><p>Docs and sources for App project: <a href=\"https://gitlab.com/k8s-draft-kodmandvl/app\">https://gitlab.com/k8s-draft-kodmandvl/app</a></p><p>Docs and sources for Infra project: <a href=\"https://gitlab.com/k8s-draft-kodmandvl/infra\">https://gitlab.com/k8s-draft-kodmandvl/infra</a></p></body></html>' > /ngnx/html/index.html ; nginx -g 'daemon off;'"]
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.deployment.spec.template.spec.containers.readinessprobe.httpget.path }}
+            port: {{ .Values.targetport }}
+        livenessProbe:
+          tcpSocket: { port: {{ .Values.targetport }} }
+

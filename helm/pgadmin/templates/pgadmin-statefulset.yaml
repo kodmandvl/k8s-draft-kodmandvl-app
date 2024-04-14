@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  # This name uniquely identifies the StatefulSet
+  name: {{ .Values.statefulset.metadata.name }}
+spec:
+  serviceName: {{ .Values.statefulset.spec.servicename }}
+  replicas: {{ .Values.statefulset.spec.replicas }}
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: {{ .Values.statefulset.metadata.name }} # has to match .spec.template.metadata.labels
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.statefulset.metadata.name }} # has to match .spec.selector.matchLabels
+    spec:
+      initContainers:
+        - name: change-owner-pgadmin-data
+          image: {{ .Values.statefulset.spec.template.spec.initcontainers.image.name }}:{{ .Values.statefulset.spec.template.spec.initcontainers.image.tag }}
+          command: ["/bin/chown", "-R", "5050:5050", "/var/lib/pgadmin"]
+          volumeMounts:
+          - name: pgadmin-data
+            mountPath: /var/lib/pgadmin
+      containers:
+      - name: pgadmin
+        envFrom:
+          - secretRef:
+              name: {{ .Values.secret }}
+        image: {{ .Values.statefulset.spec.template.spec.containers.image.name }}:{{ .Values.statefulset.spec.template.spec.containers.image.tag }}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: {{ .Values.targetport }}
+        # These volume mounts are persistent. Each pod in the PetSet
+        # gets a volume mounted based on this field.
+        volumeMounts:
+        - name: {{ .Values.configmap }}
+          mountPath: /pgadmin4/servers.json
+          subPath: servers.json
+          readOnly: true
+        - name: pgadmin-data
+          mountPath: /var/lib/pgadmin
+      volumes:
+      - name: {{ .Values.configmap }}
+        configMap:
+          name: {{ .Values.configmap }}
+  # These are converted to volume claims by the controller
+  # and mounted at the paths mentioned above. 
+  volumeClaimTemplates:
+  - metadata:
+      name: pgadmin-data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+

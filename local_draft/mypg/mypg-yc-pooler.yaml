@@ -1,0 +1,17 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: mypg-yc-pooler
+spec:
+  cluster:
+    name: mypg-yc
+
+  instances: 3
+  type: rw
+  pgbouncer:
+    poolMode: transaction
+    parameters:
+      max_client_conn: "1000"
+      default_pool_size: "150"
+      min_pool_size: "15"
+

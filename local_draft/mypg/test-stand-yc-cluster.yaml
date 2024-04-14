@@ -1,0 +1,106 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: test-stand-yc
+spec:
+  imageName: docker.io/kodmandvl/cnpg:16.2
+  instances: 1 # т.к. это тестовый стенд-копия прода, здесь будет 1 инстанс
+
+  env:
+  - name: TZ
+    value: Europe/Moscow
+
+  resources:
+    requests:
+      memory: "1536Mi"
+      cpu: 1
+    limits:
+      memory: "3072Mi"
+      cpu: 2
+
+  superuserSecret:
+    name: postgres-secret
+  enableSuperuserAccess: true
+
+  # Example of rolling update strategy:
+  # - unsupervised: automated update of the primary once all
+  #                 replicas have been upgraded (default)
+  # - supervised: requires manual supervision to perform
+  #               the switchover of the primary
+  primaryUpdateStrategy: unsupervised
+
+  # Require 1Gi of space
+  storage:
+    size: 1Gi
+  bootstrap:
+    recovery:
+      source: mypg-yc
+      database: myappdb
+      # Если нужно на определенную точку, то заполняем recoveryTarget, иначе комментируем всю секцию recoverytarget, надеясь на автоматический выбор последнего доступного бэкапа:
+      #recoveryTarget:
+        #targetImmediate: true
+        #backupID: "20240326T105515"
+        # Ищем интересующий бэкап для восстановления (backupID): kubectl get backups.postgresql.cnpg.io -o yaml | grep -i backupid
+
+  externalClusters:
+    - name: mypg-yc
+      barmanObjectStore:
+        destinationPath: "s3://mypgbackups"
+        endpointURL: "http://storage.yandexcloud.net"
+        s3Credentials:
+          accessKeyId:
+            name: mypg-yc-s3-secret
+            key: ACCESS_KEY_ID
+          secretAccessKey:
+            name: mypg-yc-s3-secret
+            key: ACCESS_SECRET_KEY
+
+  affinity:
+    enablePodAntiAffinity: true # Default value.
+    topologyKey: kubernetes.io/hostname # Default value.
+    podAntiAffinityType: preferred # Default value.
+
+# Когда уже установили Prometheus-stack, можем добавить:
+  monitoring:
+    enablePodMonitor: true
+
+  postgresql:
+    enableAlterSystem: true
+    shared_preload_libraries:
+      - auth_delay
+      - pg_cron
+# auto_explain, pg_stat_statements, pgaudit и pg_failover_slots автоматически 
+# добавятся в shared_preload_libraries, 
+# если задать параметры, которые их настраивают (см. ниже).
+# Поэтому в секции shared_preload_libraries мы их не задаем.
+    parameters:
+      pg_stat_statements.max: "5000"
+      pg_stat_statements.track: all
+      auto_explain.log_min_duration: "15s"
+      pgaudit.log: "ddl, role, misc_set"
+      pgaudit.log_catalog: "off"
+      pgaudit.log_parameter: "on"
+      pgaudit.log_relation: "on"
+      max_connections: "200"
+      auth_delay.milliseconds: "250" # milliseconds between password auth tries
+      random_page_cost: "2" # ~ random page cost for SSD
+      checkpoint_completion_target: "0.9" # more soft checkpoint
+      shared_buffers: "1024MB" # 1024MB = 1GB
+      effective_cache_size: "3072MB" # 3072MB = 3GB
+      maintenance_work_mem: "256MB"
+      autovacuum_work_mem: "128MB"
+      work_mem: "16MB"
+      temp_buffers: "16MB"
+      max_worker_processes: "16"
+      max_parallel_workers: "8"
+      max_parallel_workers_per_gather: "2" # count of CPUs
+      max_locks_per_transaction: "256"
+      default_statistics_target: "200" # samples and histograms for statistics
+      superuser_reserved_connections: "5"
+      log_timezone: "Europe/Moscow"
+      timezone: "Europe/Moscow"
+    pg_hba:
+      - host myappdb myappuser 127.0.0.1/32 trust
+      - host myappdb myappuser 10.0.0.0/8 scram-sha-256
+

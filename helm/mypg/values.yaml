@@ -1,0 +1,114 @@
+# Значение namespace нужно для FQDN сервисов при задании альтернативных имен в сертификате, 
+# если задано значение owncertificates_on 
+# (если же собственные сертификаты использовать не планируется, то значение namespace не нужно):
+namespace: mypg
+
+# Значение caclusterissuer нужно для выпуска и подписи собственных сертификатов, 
+# если задано значение owncertificates_on, 
+# в таком случае данный CluserIssuer должен существовать до установки 
+# (если же собственные сертификаты использовать не планируется, то значение caclusterissuer не нужно):
+caclusterissuer: myca
+
+####################################################################################################
+
+# Описание кластера:
+cluster:
+
+  metadata:
+    name: mypg-yc
+
+  spec:
+
+    imagename:
+      #image: docker.io/kodmandvl/cnpg
+      image: registry.gitlab.com/k8s-draft-kodmandvl/app
+      tag: 16.2
+
+    instances: 2
+
+    # Будем ли задавать ресурсы и лимиты?
+    resources_on: true
+    resources:
+      requests:
+        memory: "3072Mi"
+        cpu: 0.5
+      limits:
+        memory: "6144Mi"
+        cpu: 1.5
+
+    enablesuperuseraccess: true
+    superusersecret:
+      name: postgres-user-secret
+
+    storage:
+      size: 10Gi
+
+    bootstrap:
+      initdb:
+        database: myappdb
+        owner: myappuser
+        secret_on: true
+        secret:
+          name: application-user-secret
+        postinitsql_on: true
+        postinitapplicationsqlrefs_on: true
+        postinitapplicationsqlrefs:
+          secretrefs:
+            name: post-sql-secret
+            key: post-sql-secret.sql
+          configmaprefs:
+            name: post-sql-configmap
+            key: post-sql-configmap.sql
+
+    podantyaffinity_on: true
+
+    # Будем ли использовать для коннекта свой сертификатов, подписанным своим собственным УЦ?
+    owncertificates_on: true
+    certificates:
+      servertlssecret: mypg-yc-server-cert
+      servercasecret: mypg-yc-server-cert
+      clientcasecret: mypg-yc-client-cert
+      replicationtlssecret: mypg-yc-client-cert
+
+    # Когда уже установили Prometheus-stack, можем добавить true для enablePodMonitor:
+    monitoring:
+      enablepodmonitor: true
+
+    # Настраиваем PostgreSQL или нет? (параметры конфигурации, правила HBA, расширения)
+    postgresqltuning_on: true
+
+    # Будем ли настраивать бэкап на объектное хранилище?
+    backup_on: true
+    backup:
+      retentionpolicy: "30d" # Cрок хранения архива.
+      barmanobjectstore:
+        destinationpath: "s3://mypgbackups" # Путь к каталогу.
+        endpointurl: "http://storage.yandexcloud.net" # Сервис S3.
+        s3credentials: # Данные для доступа к bucket’у.
+          accesskeyid:
+            name: s3-secret
+            key: ACCESS_KEY_ID
+          secretaccesskey:
+            name: s3-secret
+            key: ACCESS_SECRET_KEY
+
+# Будем ли настраивать бэкап по расписанию?
+scheduledbackup_on: true
+scheduledbackup:
+  metadata:
+    name: mypg-yc-backup
+  spec:
+    schedule: "15 31 */3 * * *"
+    #schedule: "15 31 * * * *" # for testing
+    #schedule: "15 */2 * * * *" # for testing
+    backupownerreference: self
+    method: barmanObjectStore
+
+# Будем ли настраивать сервис типа LoadBalancer?
+servicelb_on: true
+servicelb:
+  metadata:
+    name: mypg-yc-svc-lb
+  spec:
+    port: 51842
+

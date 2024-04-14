@@ -1,0 +1,72 @@
+# Connection to leader, examples:
+# psql 'host=mypg-yc-rw port=5432 dbname=postgres sslmode=verify-full user=streaming_replica sslrootcert=/controller/certificates/client-ca.crt sslcert=/controller/certificates/streaming_replica.crt sslkey=/controller/certificates/streaming_replica.key'
+# psql 'host=mypg-yc-rw port=5432 dbname=postgres sslmode=verify-full user=streaming_replica sslrootcert=/controller/certificates/server-ca.crt sslcert=/controller/certificates/streaming_replica.crt sslkey=/controller/certificates/streaming_replica.key'
+# Connection to replica, examples:
+# psql 'host=mypg-yc-ro port=5432 dbname=postgres sslmode=verify-full user=streaming_replica sslrootcert=/controller/certificates/client-ca.crt sslcert=/controller/certificates/streaming_replica.crt sslkey=/controller/certificates/streaming_replica.key'
+# psql 'host=mypg-yc-ro port=5432 dbname=postgres sslmode=verify-full user=streaming_replica sslrootcert=/controller/certificates/server-ca.crt sslcert=/controller/certificates/streaming_replica.crt sslkey=/controller/certificates/streaming_replica.key'
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mypg-yc-server-cert
+  labels:
+    cnpg.io/reload: ""
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mypg-yc-server-cert
+spec:
+  secretName: mypg-yc-server-cert
+  usages:
+    - server auth
+  dnsNames:
+    - mypg-yc-pooler-svc-lb
+    - mypg-yc-pooler-svc-lb.mypg
+    - mypg-yc-pooler-svc-lb.mypg.svc
+    - mypg-yc-pooler-svc-lb.mypg.svc.cluster.local
+    - mypg-yc-pooler
+    - mypg-yc-pooler.mypg
+    - mypg-yc-pooler.mypg.svc
+    - mypg-yc-pooler.mypg.svc.cluster.local
+    - mypg-yc-svc-lb
+    - mypg-yc-svc-lb.mypg
+    - mypg-yc-svc-lb.mypg.svc
+    - mypg-yc-svc-lb.mypg.svc.cluster.local
+    - mypg-yc-rw
+    - mypg-yc-rw.mypg
+    - mypg-yc-rw.mypg.svc
+    - mypg-yc-rw.mypg.svc.cluster.local
+    - mypg-yc-r
+    - mypg-yc-r.mypg
+    - mypg-yc-r.mypg.svc
+    - mypg-yc-r.mypg.svc.cluster.local
+    - mypg-yc-ro
+    - mypg-yc-ro.mypg
+    - mypg-yc-ro.mypg.svc
+    - mypg-yc-ro.mypg.svc.cluster.local
+  issuerRef:
+    name: myca
+    kind: ClusterIssuer
+    group: cert-manager.io
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mypg-yc-client-cert
+  labels:
+    cnpg.io/reload: ""
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mypg-yc-client-cert
+spec:
+  secretName: mypg-yc-client-cert
+  usages:
+    - client auth
+  commonName: streaming_replica
+  issuerRef:
+    name: myca
+    kind: ClusterIssuer
+    group: cert-manager.io

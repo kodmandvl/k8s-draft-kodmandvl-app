@@ -1,0 +1,34 @@
+# Example 2 (with define host)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.statefulset.metadata.name }}-ingress2
+  annotations:
+    ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    cert-manager.io/cluster-issuer: "{{ .Values.clusterissuer }}"
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /(.*)  
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: {{ .Values.service.metadata.name }}
+            port:
+              number: {{ .Values.port }}
+    host: "pgadmin.{{ .Values.inclbip }}.nip.io"
+  tls:
+  - secretName: {{ .Values.tls.secret }}
+    hosts:
+    - {{ .Values.inclbip }}
+    - {{ .Values.inclbip }}.nip.io
+    - web.{{ .Values.inclbip }}.nip.io
+    - pgadmin.{{ .Values.inclbip }}.nip.io
+    - grafana.{{ .Values.inclbip }}.nip.io
+
+# Show:
+# curl -kv https://pgadmin.{{ .Values.inclbip }}.nip.io/
+

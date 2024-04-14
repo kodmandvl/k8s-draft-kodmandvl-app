@@ -1,0 +1,108 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mypg
+spec:
+  imageName: docker.io/kodmandvl/cnpg:16.2
+  instances: 1 # пока в черновике 1, а потом будет 3
+
+  superuserSecret:
+    name: postgres-secret
+  enableSuperuserAccess: true
+
+  # Example of rolling update strategy:
+  # - unsupervised: automated update of the primary once all
+  #                 replicas have been upgraded (default)
+  # - supervised: requires manual supervision to perform
+  #               the switchover of the primary
+  primaryUpdateStrategy: unsupervised
+
+  # Require 1Gi of space
+  storage:
+    size: 1Gi
+  bootstrap:
+    initdb:
+      database: myappdb
+      owner: myappuser
+      secret:
+        name: myappuser-secret
+      dataChecksums: true
+      encoding: 'UTF8'
+      postInitSQL: # run commands on postgres db as postgres user
+        - grant pg_read_all_data, pg_read_all_settings to myappuser;
+        - grant pg_write_all_data to myappuser;
+        - create extension pg_cron;
+        - INSERT INTO cron.job (schedule, command, nodename, nodeport, database, username, jobname) VALUES ('05 * * * *', 'vacuum full;', '127.0.0.1', 5432, 'myappdb', 'myappuser', 'vacuum_full');
+        - INSERT INTO cron.job (schedule, command, nodename, nodeport, database, username, jobname) VALUES ('*/15 * * * *', 'vacuum analyze;', '127.0.0.1', 5432, 'myappdb', 'myappuser', 'maintenance');
+        - INSERT INTO cron.job (schedule, command, nodename, nodeport, database, username, jobname) VALUES ('* * * * *', 'insert into myapp.size_hist(select_time,size,size_pretty,cluster_name,ip,port) select now() as select_time, size, size_pretty, cluster_name, inet_server_addr() as ip, inet_server_port() as port from (select sum(pg_database_size(datname)) as size, pg_size_pretty(sum(pg_database_size(datname))) as size_pretty from pg_database) as db, (select setting as cluster_name from pg_settings where name=''cluster_name'') as st;', '127.0.0.1', 5432, 'myappdb', 'myappuser', 'history');
+      postInitApplicationSQLRefs: # run scripts on myappdb db as postgres user
+        secretRefs:
+        - name: post-sql-secret
+          key: post-sql-secret.sql
+        configMapRefs:
+        - name: post-sql-configmap
+          key: post-sql-configmap.sql
+  affinity:
+    enablePodAntiAffinity: true # Default value.
+    topologyKey: kubernetes.io/hostname # Default value.
+    podAntiAffinityType: preferred # Default value.
+
+# Когда уже установили Prometheus-stack, можем добавить:
+  monitoring:
+    enablePodMonitor: true
+
+  postgresql:
+    enableAlterSystem: true
+    shared_preload_libraries:
+      - auth_delay
+      - pg_cron
+# auto_explain, pg_stat_statements, pgaudit и pg_failover_slots автоматически 
+# добавятся в shared_preload_libraries, 
+# если задать параметры, которые их настраивают (см. ниже).
+# Поэтому в секции shared_preload_libraries мы их не задаем.
+    parameters:
+      pg_stat_statements.max: "10000"
+      pg_stat_statements.track: all
+      auto_explain.log_min_duration: "15s"
+      pgaudit.log: "ddl, role, misc_set"
+      pgaudit.log_catalog: "off"
+      pgaudit.log_parameter: "on"
+      pgaudit.log_relation: "on"
+      max_connections: "500"
+      auth_delay.milliseconds: "1000" # milliseconds between password auth tries
+      random_page_cost: "2" # ~ random page cost for SSD
+      checkpoint_completion_target: "0.9" # more soft checkpoint
+      shared_buffers: "262144" # 262144*8KB = 2GB = 25% of RAM
+      effective_cache_size: "786432" # 786432*8KB = 6GB = 75% of RAM, на это значение просто ориентировочно полагается планировщик запросов
+      maintenance_work_mem: "524288" # 524288KB = 512MB
+      autovacuum_work_mem: "262144" # 262144KB = 256MB
+      work_mem: "32768" # 32768KB = 32MB
+      temp_buffers: "4096" # 4096*8KB = 32MB
+      max_worker_processes: "32"
+      max_parallel_workers: "16"
+      max_parallel_workers_per_gather: "2" # count of CPUs
+      max_locks_per_transaction: "256"
+      default_statistics_target: "200" # samples and histograms for statistics
+      superuser_reserved_connections: "5"
+      log_timezone: "Europe/Moscow"
+      timezone: "Europe/Moscow"
+    pg_hba:
+      - host myappdb myappuser 127.0.0.1/32 trust
+      - host myappdb myappuser 10.0.0.0/8 scram-sha-256
+
+  backup:
+    retentionPolicy: "30d" # Cрок хранения архива.
+    barmanObjectStore:
+      destinationPath: "s3://mypgbackups" # Путь к каталогу.
+      endpointURL: "http://192.168.49.2:30900" # Сервис S3.
+      s3Credentials: # Данные для доступа к bucket’у.
+        accessKeyId:
+          name: mypg-s3-secret
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: mypg-s3-secret
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip # Включено сжатие WAL.
+

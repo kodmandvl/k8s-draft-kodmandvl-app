@@ -1,0 +1,60 @@
+# В действительности в моем проекте сейчас на текущий момент востребован только ClusterIssuer myca.
+# ClusterIssuers myencrypt и myencrypt-prod оставил просто для истории и на случай, если по каким-то причинам понадобятся в дальнейшем.
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: myencrypt
+  namespace: cert-manager
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: kodmandvl@mail.ru
+    privateKeySecretRef:
+      name: myencrypt
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: myencrypt-prod
+  namespace: cert-manager
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: kodmandvl@mail.ru
+    privateKeySecretRef:
+      name: myencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: myca
+  namespace: cert-manager
+spec:
+  ca:
+    secretName: myca-key-pair
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: myca
+  namespace: cert-manager
+spec:
+  isCA: true
+  commonName: myca
+  secretName: myca-key-pair
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: myca
+    kind: ClusterIssuer
+    group: cert-manager.io

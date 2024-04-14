@@ -1,0 +1,49 @@
+# Значение caclusterissuer нужно для выпуска и подписи собственных сертификатов, 
+# если задано значение owncertificates_on, 
+# в таком случае данный CluserIssuer должен существовать до установки 
+# (если же собственные сертификаты использовать не планируется, то значение caclusterissuer не нужно):
+caclusterissuer: myca
+
+####################################################################################################
+
+# Описание пулера:
+pooler:
+  metadata:
+    name: mypg-yc-pooler
+  spec:
+    cluster:
+      name: mypg-yc
+    instances: 3
+    pgbouncer:
+      owncertificates_on: true
+      authquerysecret:
+        name: mypg-yc-pooler-cert
+      poolmode: transaction # Оптимальный режим для нас
+      parameters:
+        max_client_conn: "1000" # к PGBouner-у, не к БД
+        default_pool_size: "150" # это значение, помноженное на 3 (количество инстансов пулеров), дает 450, что равно 90% от значения параметра max_connections PostgreSQL (500). Т.о. 50 сессий остается "в запасе" для прямых подключений (без пулера).
+        min_pool_size: "15"
+
+    template:
+      spec:
+        container:
+          image:
+            name: ghcr.io/cloudnative-pg/pgbouncer
+            tag: 1.22.1-6
+          resources:
+            requests:
+              cpu: "0.1"
+              memory: 100Mi
+            limits:
+              cpu: "0.5"
+              memory: 500Mi
+        podantyaffinity_on: true
+
+# Будем ли настраивать сервис типа LoadBalancer?
+servicelb_on: true
+servicelb:
+  metadata:
+    name: mypg-yc-pooler-svc-lb
+  spec:
+    port: 51963
+

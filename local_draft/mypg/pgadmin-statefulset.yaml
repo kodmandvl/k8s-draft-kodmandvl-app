@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  # This name uniquely identifies the StatefulSet
+  name: pgadmin
+spec:
+  serviceName: pgadmin
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: pgadmin # has to match .spec.template.metadata.labels
+  template:
+    metadata:
+      labels:
+        app: pgadmin # has to match .spec.selector.matchLabels
+    spec:
+      containers:
+      - name: pgadmin
+        envFrom:
+          - secretRef:
+              name: pgadmin-secret
+        image: docker.io/dpage/pgadmin4:8.4
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 80
+        #- name: https
+        #  containerPorrt: 443
+        # These volume mounts are persistent. Each pod in the PetSet
+        # gets a volume mounted based on this field.
+        volumeMounts:
+        - name: pgadmin-configmap
+          mountPath: /pgadmin4/servers.json
+          subPath: servers.json
+          readOnly: true
+        - name: pgadmin-data
+          mountPath: /var/lib/pgadmin
+      volumes:
+      - name: pgadmin-configmap
+        configMap:
+          name: pgadmin-configmap
+  # These are converted to volume claims by the controller
+  # and mounted at the paths mentioned above. 
+  volumeClaimTemplates:
+  - metadata:
+      name: pgadmin-data
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+

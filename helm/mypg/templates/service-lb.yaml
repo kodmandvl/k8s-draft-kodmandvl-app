@@ -1,0 +1,18 @@
+{{- if .Values.servicelb_on }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.servicelb.metadata.name }}
+spec:
+  type: LoadBalancer
+  ports:
+  - name: postgres
+    port: {{ .Values.servicelb.spec.port }}
+    protocol: TCP
+    targetPort: 5432
+  selector:
+    cnpg.io/cluster: {{ .Values.cluster.metadata.name }}
+    role: primary
+{{- end }}
+

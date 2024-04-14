@@ -1,0 +1,18 @@
+{{- if .Values.scheduledbackup_on }}
+---
+# Request an on-demand backup:
+# kubectl-cnpg backup <your-cluster>
+# kubectl get backups.postgresql.cnpg.io 
+# kubectl get scheduledbackups.postgresql.cnpg.io 
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ .Values.scheduledbackup.metadata.name }}
+spec:
+  schedule: {{ .Values.scheduledbackup.spec.schedule }}
+  backupOwnerReference: self
+  cluster:
+    name: {{ .Values.cluster.metadata.name }}
+  method: {{ .Values.scheduledbackup.spec.method }}
+{{- end }}
+

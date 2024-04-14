@@ -1,0 +1,41 @@
+# External IP address of ingress-nginx-controller LoadBalancer:
+inclbip: 158.160.150.250
+
+# External IP address of PGCluster LoadBalancer (если его нет, то можно оставить как есть):
+pgclbip: 158.160.161.26
+
+# External IP address of Pooler LoadBalancer (если его нет, то можно оставить как есть):
+pgplbip: 158.160.160.84
+
+# CA ClusterIssuer:
+clusterissuer: myca
+
+# Secret for TLS (создастся автоматически):
+tls:
+  secret: webcert
+
+port: 80
+
+targetport: 8080
+
+####################################################################################################
+
+deployment:
+  metadata:
+    name: web
+  spec:
+    replicas: 3
+    template:
+      spec:
+        containers:
+          image:
+            name: kodmandvl/mynginx
+            tag: v5
+          readinessprobe:
+            httpget:
+              path: /index.html
+
+service:
+  metadata:
+    name: web-svc
+

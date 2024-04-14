@@ -1,0 +1,50 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: {{ .Values.pooler.metadata.name }}
+spec:
+  cluster:
+    name: {{ .Values.pooler.spec.cluster.name }}
+
+  instances: {{ .Values.pooler.spec.instances }}
+  type: rw
+  pgbouncer:
+{{- if .Values.pooler.spec.pgbouncer.owncertificates_on }}
+    authQuerySecret:
+      name: {{ .Values.pooler.spec.pgbouncer.authquerysecret.name }}
+    authQuery: "SELECT usename, passwd FROM user_search($1)"
+{{- end }}
+    poolMode: {{ .Values.pooler.spec.pgbouncer.poolmode }}
+    parameters:
+      max_client_conn: "{{ .Values.pooler.spec.pgbouncer.parameters.max_client_conn }}"
+      default_pool_size: "{{ .Values.pooler.spec.pgbouncer.parameters.default_pool_size }}"
+      min_pool_size: "{{ .Values.pooler.spec.pgbouncer.parameters.min_pool_size }}"
+
+  template:
+    metadata:
+      labels:
+        app: pooler
+    spec:
+      containers:
+        - name: pgbouncer
+          image: {{ .Values.pooler.spec.template.spec.container.image.name }}:{{ .Values.pooler.spec.template.spec.container.image.tag }}
+          resources:
+            requests:
+              cpu: "{{ .Values.pooler.spec.template.spec.container.resources.requests.cpu }}"
+              memory: {{ .Values.pooler.spec.template.spec.container.resources.requests.memory }}
+            limits:
+              cpu: "{{ .Values.pooler.spec.template.spec.container.resources.limits.cpu }}"
+              memory: {{ .Values.pooler.spec.template.spec.container.resources.limits.memory }}
+{{- if .Values.pooler.spec.template.spec.podantyaffinity_on }}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - pooler
+            topologyKey: "kubernetes.io/hostname"
+{{- end }}
+

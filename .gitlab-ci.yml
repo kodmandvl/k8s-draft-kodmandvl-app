@@ -1,0 +1,195 @@
+# Секцию services пока закомментировал, т.к. это было мне нужно только для сборки образа:
+#services:
+#  - name: docker:dind
+
+variables:
+  AGENT: k8s-draft-kodmandvl
+  IMAGE_NAME: registry.gitlab.com/k8s-draft-kodmandvl/app
+  IMAGE_TAG: 16.2
+
+stages:
+  - check_conn_to_k8s
+  - build
+  - namespaces
+  - ingress-nginx
+  - create-secrets
+  - cert-manager
+  - clusterissuers
+  - cnpg
+  - prometheus-operator
+  - prometheusrule
+  - mypg
+  - pooler
+  - mynginx
+  - pgadmin
+  - grafana-ingress
+
+check_conn_to_k8s:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: check_conn_to_k8s
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - kubectl get nodes -o wide
+
+build:
+  image: docker:latest
+  stage: build
+  when: manual
+  script:
+    - echo $IMAGE_NAME:$IMAGE_TAG # registry.gitlab.com/k8s-draft-kodmandvl/app:16.2
+    - echo $CI_REGISTRY # registry.gitlab.com
+    - echo $CI_REGISTRY_USER # gitlab-ci-token
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build --pull -t $IMAGE_NAME:$IMAGE_TAG -f docker/mycnpg/Dockerfile docker/mycnpg/
+    - docker push $IMAGE_NAME:$IMAGE_TAG
+
+namespaces:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: namespaces
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - kubectl apply -f namespaces/namespaces.yaml
+
+ingress-nginx:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: ingress-nginx
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx && helm repo update && helm install ingress-nginx ingress-nginx/ingress-nginx -n ingress-nginx && echo INGRESS_NGINX_OK
+    - helm ls -n ingress-nginx
+    - kubectl get all -n ingress-nginx
+
+create-secrets:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: create-secrets
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - echo $PGADMIN_SECRET | base64 -d > /tmp/pgadmin-secret.yaml
+    - kubectl apply -n mypg -f /tmp/pgadmin-secret.yaml
+    - rm -v /tmp/pgadmin-secret.yaml
+    - echo $S3_SECRET | base64 -d > /tmp/s3-secret.yaml
+    - kubectl apply -n mypg -f /tmp/s3-secret.yaml
+    - rm -v /tmp/s3-secret.yaml
+    - echo $POSTGRES_USER_SECRET | base64 -d > /tmp/postgres-user-secret.yaml
+    - kubectl apply -n mypg -f /tmp/postgres-user-secret.yaml
+    - rm -v /tmp/postgres-user-secret.yaml
+    - echo $APPLICATION_USER_SECRET | base64 -d > /tmp/application-user-secret.yaml
+    - kubectl apply -n mypg -f /tmp/application-user-secret.yaml
+    - rm -v /tmp/application-user-secret.yaml
+    - echo $POST_SQL_SECRET | base64 -d > /tmp/post-sql-secret.yaml
+    - kubectl apply -n mypg -f /tmp/post-sql-secret.yaml
+    - rm -v /tmp/post-sql-secret.yaml
+    - echo $MYCA_KEY_PAIR_SECRET | base64 -d > /tmp/myca-key-pair-secret.yaml
+    - kubectl apply -n cert-manager -f /tmp/myca-key-pair-secret.yaml
+    - rm -v /tmp/myca-key-pair-secret.yaml
+
+cert-manager:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: cert-manager
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v1.14.4/cert-manager.crds.yaml && echo CRDS_FOR_CERT_MANAGER_OK
+    - helm repo add jetstack https://charts.jetstack.io && helm repo update && helm upgrade --install cert-manager jetstack/cert-manager --atomic --namespace=cert-manager --version=1.14.4 && echo CERT_MANAGER_OK
+    - helm ls -n cert-manager
+    - kubectl get all -n cert-manager
+
+clusterissuers:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: clusterissuers
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - kubectl apply -f cert-manager/clusterissuers.yaml
+    - kubectl get -n cert-manager clusterissuers
+
+cnpg:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: cnpg
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - helm upgrade --install cloudnative-pg helm/cnpg --namespace cnpg-system && echo CNPG_OK
+    - helm ls -n cnpg-system
+    - kubectl get all -n cnpg-system
+
+prometheus-operator:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: prometheus-operator
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - kubectl config set-context --current --namespace=mon
+    - kubectl config get-contexts
+    - wget https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/main/docs/src/samples/monitoring/kube-stack-config.yaml
+    - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && helm repo update && helm upgrade --install -f ./kube-stack-config.yaml prometheus-community prometheus-community/kube-prometheus-stack --namespace=mon && echo PROMETHEUS_OPERATOR_OK
+    - helm ls -n mon
+    - kubectl get all -n mon
+    - kubectl get crds
+
+prometheusrule:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: prometheusrule
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - kubectl config set-context --current --namespace=mon
+    - kubectl config get-contexts
+    - wget https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/main/docs/src/samples/monitoring/prometheusrule.yaml
+    - kubectl apply -f prometheusrule.yaml -n mon
+
+mypg:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: mypg
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - helm upgrade --install mypg helm/mypg --namespace mypg && echo MYPG_OK
+    - helm ls -n mypg
+    - kubectl get all -n mypg
+
+pooler:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: pooler
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - helm upgrade --install pooler helm/pooler --namespace mypg && echo POOLER_OK
+    - helm ls -n mypg
+    - kubectl get all -n mypg
+
+mynginx:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: mynginx
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - helm upgrade --install mynginx helm/mynginx --namespace web && echo MYNGINX_OK
+    - helm ls -n web
+    - kubectl get all -n web
+    - kubectl patch deployment -n ingress-nginx ingress-nginx-controller --type "json" --patch '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--default-ssl-certificate=web/webcert"}]'
+    - kubectl get -n ingress-nginx deployments.apps -o yaml | grep ssl
+
+pgadmin:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: pgadmin
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - helm upgrade --install pgadmin helm/pgadmin --namespace mypg && echo PGADMIN_OK
+    - helm ls -n mypg
+    - kubectl get all -n mypg
+
+grafana-ingress:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: grafana-ingress
+  when: manual
+  script:
+    - kubectl config use-context k8s-draft-kodmandvl/app:${AGENT}
+    - kubectl apply -n mon -f monitoring/grafana-ingress.yaml && echo GRAFANA_INGRESS_OK
+    - kubectl get -n mon ingresses
+

@@ -1,0 +1,34 @@
+# (My .gitlab-ci.yml example-draft without gitlab-agent)
+
+services:
+  - name: docker:dind
+
+stages:
+  - check_conn_to_k8s
+  - build
+
+variables:
+  IMAGE_NAME: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+
+check_conn_to_k8s:
+  image: dtzar/helm-kubectl:3.13.2
+  stage: check_conn_to_k8s
+  before_script:
+    - mkdir -p ~/.kube/
+    - echo $KUBE_CONFIG | base64 -d > ~/.kube/config
+    - export KUBECONFIG=~/.kube/config
+  script:
+    - kubectl get svc -A -o wide
+    - kubectl get po -A -o wide
+    - kubectl get nodes -o wide
+
+build:
+  image: docker:latest
+  stage: build
+  script:
+    - echo $IMAGE_NAME # Example: registry.gitlab.com/k8s-draft-kodmandvl/app:b980c473
+    - echo $CI_REGISTRY # registry.gitlab.com
+    - echo $CI_REGISTRY_USER # gitlab-ci-token
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build --pull -t $IMAGE_NAME -f docker/mycnpg/Dockerfile docker/mycnpg/
+    - docker push $IMAGE_NAME

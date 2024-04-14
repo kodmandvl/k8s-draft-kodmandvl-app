@@ -1,0 +1,17 @@
+# Request an on-demand backup:
+# kubectl-cnpg backup mypg-yc
+# kubectl get backups.postgresql.cnpg.io 
+# kubectl get scheduledbackups.postgresql.cnpg.io 
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: mypg-yc-backup
+spec:
+  schedule: "15 31 * * * *"
+  #schedule: "15 */2 * * * *" # for testing
+  backupOwnerReference: self
+  cluster:
+    name: mypg-yc
+  method: barmanObjectStore
+

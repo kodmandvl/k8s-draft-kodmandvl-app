@@ -1,0 +1,25 @@
+{{- if .Values.cluster.spec.bootstrap.initdb.postinitapplicationsqlrefs_on }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.cluster.spec.bootstrap.initdb.postinitapplicationsqlrefs.configmaprefs.name }}
+data:
+  {{ .Values.cluster.spec.bootstrap.initdb.postinitapplicationsqlrefs.configmaprefs.key }}: |
+    create schema if not exists myapp authorization myappuser;
+    alter database myappdb set search_path to myapp, public;
+    alter database myappdb owner to myappuser;
+    create table myapp.size_hist as select now() as select_time, size, size_pretty, cluster_name, inet_server_addr() as ip, inet_server_port() as port from (select sum(pg_database_size(datname)) as size, pg_size_pretty(sum(pg_database_size(datname))) as size_pretty from pg_database) as db, (select setting as cluster_name from pg_settings where name='cluster_name') as st;
+    alter table myapp.size_hist owner to myappuser;
+    create extension pgcrypto;
+    GRANT CONNECT ON DATABASE myappdb TO cnpg_pooler_pgbouncer;
+    CREATE OR REPLACE FUNCTION public.user_search(uname TEXT)
+      RETURNS TABLE (usename name, passwd text)
+      LANGUAGE sql SECURITY DEFINER AS
+      'SELECT usename, passwd FROM pg_catalog.pg_shadow WHERE usename=$1;';
+    REVOKE ALL ON FUNCTION public.user_search(text)
+      FROM public;
+    GRANT EXECUTE ON FUNCTION public.user_search(text)
+      TO cnpg_pooler_pgbouncer;
+{{- end }}
+

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-stand-svc-lb
+spec:
+  type: LoadBalancer
+  ports:
+  - name: postgres
+    port: 5434
+    protocol: TCP
+    targetPort: 5432
+    nodePort: 30434
+  selector:
+    cnpg.io/cluster: test-stand
+    role: primary

@@ -1,0 +1,12 @@
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: mypg-backup
+spec:
+  schedule: "15 */5 * * * *"
+  backupOwnerReference: self
+  cluster:
+    name: mypg
+  method: barmanObjectStore
+
